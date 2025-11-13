@@ -1,0 +1,59 @@
+---
+- hosts: all
+  become: yes
+
+  tasks:
+
+    - name: Instalar DHCP y DNS
+      apt:
+        name:
+          - isc-dhcp-server
+          - bind9
+        state: present
+        update_cache: yes
+
+    - name: Configurar DHCP
+      copy:
+        dest: /etc/dhcp/dhcpd.conf
+        content: |
+          subnet 192.168.56.0 netmask 255.255.255.0 {
+            range 192.168.56.20 192.168.56.30;
+            option routers 192.168.56.10;
+            option domain-name-servers 192.168.56.10;
+            option domain-name "hugocm.local";
+          }
+
+    - name: Configurar interfaz para DHCP
+      copy:
+        dest: /etc/default/isc-dhcp-server
+        content: 'INTERFACESv4="eth1"'
+
+    - name: Configurar DNS
+      copy:
+        dest: /etc/bind/named.conf.local
+        content: |
+          zone "hugocm.local" {
+            type master;
+            file "/var/lib/bind/db.hugocm.local";
+          };
+
+    - name: Crear archivo de zona DNS
+      copy:
+        dest: /var/lib/bind/db.hugocm.local
+        content: |
+          @       IN      SOA     servidor.hugocm.local. root.hugocm.local. (
+                          1
+                          604800
+                          86400
+                          2419200
+                          604800 )
+          @       IN      NS      servidor.hugocm.local.
+          servidor IN      A       192.168.56.10
+
+    - name: Reiniciar servicios
+      service:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - isc-dhcp-server
+        - bind9
